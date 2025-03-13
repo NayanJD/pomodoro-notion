@@ -14,5 +14,5 @@ in the child database. The basic columns for `Pomodoro Sessions` are: `Name`, `P
     1. Cd into server
     2. Using Node >= 16, do `npm install`
     3. Run `node server.js` 
-4. Open the client/pomodoro.html by doble clicking or using `open client/pomodoro.html`
+4. Open the client/pomodoro.html by double clicking or using `open client/pomodoro.html`
 5. Your pomodoro clock is up 🥳
