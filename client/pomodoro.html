@@ -60,50 +60,41 @@
         let time;
         let workTime = 25 * 60;
         let breakTime = 5 * 60;
-        let timerInterval;
         let isWorkMode = true;
         let startTime;
-        let overtime = 0;
-        let lastOvertimeAlert = 0;
+        let timerInterval;
 
         function updateTimerDisplay() {
-            let displayTime = time < 0 ? (isWorkMode ? workTime : breakTime) + Math.abs(time) : time;
-            const minutes = Math.floor(displayTime / 60);
-            const seconds = displayTime % 60;
+            let elapsed = Math.floor((Date.now() - startTime) / 1000);
+            let totalTime = elapsed;
+            
+            if (elapsed >= (isWorkMode ? workTime : breakTime)) {
+                document.getElementById("timer").classList.replace("bg-success", "bg-danger");
+                document.getElementById("timer").classList.replace("bg-secondary", "bg-danger");
+                if (isWorkMode && elapsed % (5 * 60) === 0) {
+                    playAlarm();
+                }
+                if (!isWorkMode && elapsed === (isWorkMode ? workTime : breakTime) + 1) {
+                    playAlarm();
+                }
+            }
+            
+            const minutes = Math.floor(totalTime / 60);
+            const seconds = totalTime % 60;
             document.getElementById("timer").innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
 
         function startTimer() {
-            if (!timerInterval) {
-                if (isWorkMode) {
-                    workTime = document.getElementById("workTime").value * 60;
-                    time = workTime;
-                    overtime = 0;
-                    lastOvertimeAlert = 0;
-                } else {
-                    breakTime = document.getElementById("breakTime").value * 60;
-                    time = breakTime;
-                }
-                startTime = new Date();
-                timerInterval = setInterval(() => {
-                    if (time > 0) {
-                        time--;
-                    } else {
-                        document.getElementById("timer").classList.replace("bg-success", "bg-danger");
-                        document.getElementById("timer").classList.replace("bg-secondary", "bg-danger");
-                        overtime++;
-                        time--;
-
-                        if (isWorkMode && overtime % (5 * 60) === 0) {
-                            playAlarm();
-                        }
-                        if (!isWorkMode && overtime === 1) {
-                            playAlarm();
-                        }
-                    }
-                    updateTimerDisplay();
-                }, 1000);
+            if (timerInterval) return;
+            
+            if (isWorkMode) {
+                workTime = document.getElementById("workTime").value * 60;
+            } else {
+                breakTime = document.getElementById("breakTime").value * 60;
             }
+            
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimerDisplay, 1000);
         }
 
         function stopTimer() {
@@ -120,9 +111,6 @@
         function startBreak() {
             isWorkMode = false;
             breakTime = document.getElementById("breakTime").value * 60;
-            time = breakTime;
-            overtime = 0;
-            lastOvertimeAlert = 0;
             document.getElementById("timer").classList.replace("bg-danger", "bg-secondary");
             document.getElementById("timer").classList.replace("bg-success", "bg-secondary");
             startTimer();
@@ -131,9 +119,6 @@
         function resetWorkMode() {
             isWorkMode = true;
             workTime = document.getElementById("workTime").value * 60;
-            time = workTime;
-            overtime = 0;
-            lastOvertimeAlert = 0;
             document.getElementById("timer").classList.replace("bg-secondary", "bg-success");
             document.getElementById("timer").classList.replace("bg-danger", "bg-success");
             updateTimerDisplay();
@@ -144,7 +129,7 @@
             const taskId = document.getElementById("tasks").value;
             axios.post("http://localhost:5000/log-session", {
                 taskId: taskId,
-                startTime: startTime.toISOString(),
+                startTime: new Date(startTime).toISOString(),
                 endTime: endTime.toISOString()
             });
         }
@@ -172,4 +157,3 @@
     </script>
 </body>
 </html>
-
