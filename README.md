@@ -5,7 +5,7 @@
 Its a very simple pomodoro clock which uses a notion database to store the pomodoro sessions. I use Notion to do task management. 
 The structure of it is `Projects` > `Projects Tasks` > `Pomodoro Sessions`. The `>` means there exists one `Relation` type column
 in the child database. The basic columns for `Pomodoro Sessions` are: `Name`, `Project Tasks`, `Start Date`, `End Date`. The column
-`Project Tasks` is a relation type to `Proejct Tasks` database.
+`Project Tasks` is a relation type to `Project Tasks` database.
 
 ## How to Run
 
@@ -14,5 +14,5 @@ in the child database. The basic columns for `Pomodoro Sessions` are: `Name`, `P
     1. Cd into server
     2. Using Node >= 16, do `npm install`
     3. Run `node server.js` 
-4. Open the client/pomodoro.html by doble clicking or using `open client/pomodoro.html`
+4. Open the client/pomodoro.html by double clicking or using `open client/pomodoro.html`
 5. Your pomodoro clock is up 🥳
