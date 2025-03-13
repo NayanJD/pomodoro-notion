@@ -54,30 +54,52 @@
         <select id="tasks" class="form-select"></select>
     </div>
 
+    <audio id="alarm" src="https://www.fesliyanstudios.com/play-mp3/4387"></audio>
+    
     <script>
         let time;
-        let breakTime;
+        let workTime = 25 * 60;
+        let breakTime = 5 * 60;
         let timerInterval;
         let isWorkMode = true;
         let startTime;
+        let overtime = 0;
+        let lastOvertimeAlert = 0;
 
         function updateTimerDisplay() {
-            const minutes = Math.floor(time / 60);
-            const seconds = time % 60;
+            let displayTime = time < 0 ? (isWorkMode ? workTime : breakTime) + Math.abs(time) : time;
+            const minutes = Math.floor(displayTime / 60);
+            const seconds = displayTime % 60;
             document.getElementById("timer").innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
 
         function startTimer() {
             if (!timerInterval) {
-                time = document.getElementById("workTime").value * 60;
-                breakTime = document.getElementById("breakTime").value * 60;
+                if (isWorkMode) {
+                    workTime = document.getElementById("workTime").value * 60;
+                    time = workTime;
+                    overtime = 0;
+                    lastOvertimeAlert = 0;
+                } else {
+                    breakTime = document.getElementById("breakTime").value * 60;
+                    time = breakTime;
+                }
                 startTime = new Date();
                 timerInterval = setInterval(() => {
                     if (time > 0) {
                         time--;
                     } else {
                         document.getElementById("timer").classList.replace("bg-success", "bg-danger");
+                        document.getElementById("timer").classList.replace("bg-secondary", "bg-danger");
+                        overtime++;
                         time--;
+
+                        if (isWorkMode && overtime % (5 * 60) === 0) {
+                            playAlarm();
+                        }
+                        if (!isWorkMode && overtime === 1) {
+                            playAlarm();
+                        }
                     }
                     updateTimerDisplay();
                 }, 1000);
@@ -96,16 +118,22 @@
         }
 
         function startBreak() {
-            time = breakTime;
             isWorkMode = false;
+            breakTime = document.getElementById("breakTime").value * 60;
+            time = breakTime;
+            overtime = 0;
+            lastOvertimeAlert = 0;
             document.getElementById("timer").classList.replace("bg-danger", "bg-secondary");
             document.getElementById("timer").classList.replace("bg-success", "bg-secondary");
             startTimer();
         }
 
         function resetWorkMode() {
-            time = document.getElementById("workTime").value * 60;
             isWorkMode = true;
+            workTime = document.getElementById("workTime").value * 60;
+            time = workTime;
+            overtime = 0;
+            lastOvertimeAlert = 0;
             document.getElementById("timer").classList.replace("bg-secondary", "bg-success");
             document.getElementById("timer").classList.replace("bg-danger", "bg-success");
             updateTimerDisplay();
@@ -134,9 +162,14 @@
             });
         }
 
+        function playAlarm() {
+            document.getElementById("alarm").play();
+        }
+
         document.getElementById("start").addEventListener("click", startTimer);
         document.getElementById("stop").addEventListener("click", stopTimer);
         fetchTasks();
     </script>
 </body>
 </html>
+
