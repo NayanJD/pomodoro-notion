@@ -31,7 +31,13 @@
 </head>
 <body class="d-flex flex-column align-items-center mt-5">
     <h1>Pomodoro Timer</h1>
-    <div id="timer" class="bg-success text-white">25:00</div>
+    
+    <div class="form-check form-switch mt-3">
+        <input class="form-check-input" type="checkbox" id="modeToggle">
+        <label class="form-check-label" for="modeToggle">Work Mode</label>
+    </div>
+    
+    <div id="timer" class="bg-success text-white mt-3">25:00</div>
     
     <div class="mt-3 input-container">
         <div>
@@ -65,73 +71,65 @@
         let timerInterval;
 
         function updateTimerDisplay() {
-            let elapsed = Math.floor((Date.now() - startTime) / 1000);
-            let totalTime = elapsed;
-            
-            if (elapsed >= (isWorkMode ? workTime : breakTime)) {
-                document.getElementById("timer").classList.replace("bg-success", "bg-danger");
-                document.getElementById("timer").classList.replace("bg-secondary", "bg-danger");
-                if (isWorkMode && elapsed % (5 * 60) === 0) {
-                    playAlarm();
-                }
-                if (!isWorkMode && elapsed === (isWorkMode ? workTime : breakTime) + 1) {
-                    playAlarm();
-                }
-            }
-            
-            const minutes = Math.floor(totalTime / 60);
-            const seconds = totalTime % 60;
+            const minutes = Math.floor(time / 60);
+            const seconds = time % 60;
             document.getElementById("timer").innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
 
         function startTimer() {
             if (timerInterval) return;
             
-            if (isWorkMode) {
-                workTime = document.getElementById("workTime").value * 60;
-            } else {
-                breakTime = document.getElementById("breakTime").value * 60;
-            }
-            
             startTime = Date.now();
-            timerInterval = setInterval(updateTimerDisplay, 1000);
+            timerInterval = setInterval(() => {
+                let elapsed = Math.floor((Date.now() - startTime) / 1000);
+                time = (isWorkMode ? workTime : breakTime) - elapsed;
+                
+                if (time <= 0) {
+                    time = Math.abs(time);
+                    if (isWorkMode) {
+                        document.getElementById("timer").classList.replace("bg-success", "bg-danger");
+                    }
+                    if (isWorkMode && time % (5 * 60) === 0) {
+                        playAlarm();
+                    }
+                }
+                updateTimerDisplay();
+            }, 1000);
         }
 
         function stopTimer() {
             clearInterval(timerInterval);
             timerInterval = null;
-            if (isWorkMode) {
-                logSession();
-                startBreak();
-            } else {
-                resetWorkMode();
-            }
-        }
-
-        function startBreak() {
-            isWorkMode = false;
-            breakTime = document.getElementById("breakTime").value * 60;
-            document.getElementById("timer").classList.replace("bg-danger", "bg-secondary");
-            document.getElementById("timer").classList.replace("bg-success", "bg-secondary");
-            startTimer();
         }
 
         function resetWorkMode() {
             isWorkMode = true;
             workTime = document.getElementById("workTime").value * 60;
+            time = workTime;
             document.getElementById("timer").classList.replace("bg-secondary", "bg-success");
             document.getElementById("timer").classList.replace("bg-danger", "bg-success");
+            document.getElementById("modeToggle").checked = true;
+            document.querySelector("label[for=modeToggle]").innerText = "Work Mode";
             updateTimerDisplay();
         }
 
-        function logSession() {
-            const endTime = new Date();
-            const taskId = document.getElementById("tasks").value;
-            axios.post("http://localhost:5000/log-session", {
-                taskId: taskId,
-                startTime: new Date(startTime).toISOString(),
-                endTime: endTime.toISOString()
-            });
+        function resetBreakMode() {
+            isWorkMode = false;
+            breakTime = document.getElementById("breakTime").value * 60;
+            time = breakTime;
+            document.getElementById("timer").classList.replace("bg-danger", "bg-secondary");
+            document.getElementById("timer").classList.replace("bg-success", "bg-secondary");
+            document.getElementById("modeToggle").checked = false;
+            document.querySelector("label[for=modeToggle]").innerText = "Break Mode";
+            updateTimerDisplay();
+        }
+
+        function toggleMode() {
+            if (document.getElementById("modeToggle").checked) {
+                resetWorkMode();
+            } else {
+                resetBreakMode();
+            }
         }
 
         function fetchTasks() {
@@ -153,7 +151,10 @@
 
         document.getElementById("start").addEventListener("click", startTimer);
         document.getElementById("stop").addEventListener("click", stopTimer);
+        document.getElementById("modeToggle").addEventListener("change", toggleMode);
         fetchTasks();
+        resetWorkMode();
     </script>
 </body>
 </html>
+
