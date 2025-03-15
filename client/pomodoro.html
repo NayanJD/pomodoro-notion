@@ -48,7 +48,7 @@
     <h1>Pomodoro Timer</h1>
     
     <div class="form-check form-switch mt-3">
-        <input class="form-check-input" type="checkbox" id="modeToggle">
+        <input class="form-check-input" type="checkbox" id="modeToggle" checked>
         <label class="form-check-label" id="modeLabel" for="modeToggle">Work Mode</label>
     </div>
     
@@ -84,8 +84,6 @@
     
     <script>
         let time;
-        let workTime = 25 * 60;
-        let breakTime = 5 * 60;
         let isWorkMode = true;
         let timerInterval;
         let sessionStartTime;
@@ -95,6 +93,12 @@
             const minutes = Math.floor(time / 60);
             const seconds = time % 60;
             document.getElementById("timer").innerText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function toggleMode() {
+            isWorkMode = document.getElementById("modeToggle").checked;
+            document.getElementById("modeLabel").innerText = isWorkMode ? "Work Mode" : "Break Mode";
+            resetTimerDisplay();
         }
 
         function startTimer() {
@@ -121,6 +125,10 @@
             timerInterval = null;
             document.getElementById("start").disabled = false;
             document.getElementById("stop").disabled = true;
+            
+            if (isWorkMode && !isCancelled) {
+                logSession();
+            }
         }
 
         function cancelTimer() {
@@ -135,33 +143,32 @@
             updateTimerDisplay();
         }
 
-        function fetchTasks() {
-            document.getElementById("loadingSpinner").style.display = "inline-block";
+        function logSession() {
+            const endTime = new Date().toISOString();
+            const selectedTask = document.getElementById("tasks").value;
+            if (!selectedTask) return;
             
-            axios.get("http://localhost:5000/tasks")
-                .then(response => {
-                    const select = document.getElementById("tasks");
-                    select.innerHTML = "";
-                    response.data.results.forEach(task => {
-                        const option = document.createElement("option");
-                        option.value = task.id;
-                        option.textContent = task.properties.Name.title[0].text.content;
-                        select.appendChild(option);
-                    });
-                })
-                .catch(error => {
-                    console.error("Error fetching tasks:", error);
-                })
-                .finally(() => {
-                    document.getElementById("loadingSpinner").style.display = "none";
-                });
+            axios.post("http://localhost:5000/log-session", {
+                taskId: selectedTask,
+                startTime: sessionStartTime,
+                endTime: endTime
+            }).then(response => {
+                console.log("Session logged successfully", response.data);
+            }).catch(error => {
+                console.error("Error logging session:", error);
+            });
         }
 
+        document.getElementById("modeToggle").addEventListener("change", toggleMode);
         document.getElementById("start").addEventListener("click", startTimer);
         document.getElementById("stop").addEventListener("click", stopTimer);
         document.getElementById("cancel").addEventListener("click", cancelTimer);
         document.getElementById("refreshTasks").addEventListener("click", fetchTasks);
-        window.onload = fetchTasks;
+        
+        window.onload = () => {
+            fetchTasks();
+            toggleMode();
+        };
     </script>
 </body>
 </html>
