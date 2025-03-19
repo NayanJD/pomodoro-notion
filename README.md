@@ -2,6 +2,8 @@
 
 ![pomodoro-notion-screenshot](https://github.com/NayanJD/pomodoro-notion/blob/main/assets/pomodoro-notion-screenshot.png)
 
+(*Generated using Claude 3.7 Sonnet and ChatGpt 4o*)
+
 Its a very simple pomodoro clock which uses a notion database to store the pomodoro sessions. I use Notion to do task management. 
 The structure of it is `Projects` > `Projects Tasks` > `Pomodoro Sessions`. The `>` means there exists one `Relation` type column
 in the child database. The basic columns for `Pomodoro Sessions` are: `Name`, `Project Tasks`, `Start Date`, `End Date`. The column
