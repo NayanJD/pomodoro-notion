@@ -174,6 +174,8 @@
             let isRunning = false;
             let sessionStartTime = null;
             let isWorkMode = true;
+            let timerStartTime = null;
+            let targetSeconds = 0;
             
             // Fetch tasks from local server
             fetchTasks();
@@ -307,10 +309,17 @@
                     currentTask.classList.remove('d-none');
                     taskDisplay.textContent = taskSelect.options[taskSelect.selectedIndex].text;
                 }
+
+                // Set the target seconds and start time
+                targetSeconds = seconds;
+                timerStartTime = Date.now();
                 
                 timerInterval = setInterval(function() {
+                    const elapsedSeconds = Math.floor((Date.now() - timerStartTime) / 1000);
+                    seconds = Math.max(0, targetSeconds - elapsedSeconds);
+                    
                     if (seconds > 0) {
-                        seconds--;
+
                         displayTime();
                     } else {
                         // Timer complete
@@ -322,7 +331,7 @@
                         playAlarmSound();
                         resetTimer();
                     }
-                }, 1000);
+                }, 100); // Update more frequently to ensure smooth display
             }
             
             // Stop the timer
@@ -335,6 +344,7 @@
                 }
                 
                 isRunning = false;
+                timerStartTime = null;
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
             }
