@@ -61,7 +61,7 @@ func handleTasks(cfg *Config) http.HandlerFunc {
 		defer cancel()
 
 		req, err := http.NewRequestWithContext(ctx,
-			"GET",
+			"POST",
 			fmt.Sprintf("https://api.notion.com/v1/databases/%s/query", cfg.ProjectTasksID),
 			nil)
 		if err != nil {
@@ -75,11 +75,12 @@ func handleTasks(cfg *Config) http.HandlerFunc {
 
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", cfg.NotionAPIKey))
 		req.Header.Add("Notion-Version", "2022-06-28")
+		req.Header.Add("Content-Type", "application/json")
 
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			slog.Error("Error while making request to notion", "handler", "tasks", "err", err)
+		if err != nil || (resp != nil && resp.StatusCode >= 500 && resp.StatusCode < 600) {
+			slog.Error("Error while making request to notion", "handler", "tasks", "err", err, "statusCode", resp.StatusCode)
 			sendJSONResponse(w, http.StatusInternalServerError, Response{
 				Error: "failed to fetch tasks from Notion",
 			})
@@ -88,7 +89,10 @@ func handleTasks(cfg *Config) http.HandlerFunc {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			slog.Error("Non-200 response from Notion", "handler", "tasks", "status", resp.StatusCode)
+			var anyErr interface{}
+			json.NewDecoder(resp.Body).Decode(&anyErr)
+
+			slog.Error("Non-200 response from Notion", "handler", "tasks", "status", resp.StatusCode, "error", anyErr)
 			sendJSONResponse(w, http.StatusInternalServerError, Response{
 				Error: "received error response from Notion",
 			})
