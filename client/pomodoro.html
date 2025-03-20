@@ -15,6 +15,12 @@
             font-size: 6rem;
             font-weight: bold;
             color: #212529;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .timer-overtime {
+            background-color: #ffebee;
+            color: #dc3545;
         }
         .card {
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -316,21 +322,26 @@
                 
                 timerInterval = setInterval(function() {
                     const elapsedSeconds = Math.floor((Date.now() - timerStartTime) / 1000);
-                    seconds = Math.max(0, targetSeconds - elapsedSeconds);
-                    
-                    if (seconds > 0) {
 
-                        displayTime();
-                    } else {
-                        // Timer complete
-                        clearInterval(timerInterval);
+                    
+                    if (elapsedSeconds >= targetSeconds && !timerDisplay.classList.contains('timer-overtime')) {
+                        // Time is up, but continue running
+                        timerDisplay.classList.add('timer-overtime');
+                        playAlarmSound();
                         if (isWorkMode) {
                             logSession();
                         }
-                        isRunning = false;
-                        playAlarmSound();
-                        resetTimer();
                     }
+                    
+                    // In overtime, show total elapsed time
+                    if (elapsedSeconds >= targetSeconds) {
+                        seconds = elapsedSeconds;
+                    } else {
+                        // Before overtime, show remaining time
+                        seconds = targetSeconds - elapsedSeconds;
+                    }
+                    
+                    displayTime();
                 }, 100); // Update more frequently to ensure smooth display
             }
             
@@ -360,12 +371,14 @@
                 breakTimeInput.disabled = false;
                 taskSelect.disabled = false;
                 currentTask.classList.add('d-none');
+                timerDisplay.classList.remove('timer-overtime');
                 updateTimerDisplay();
             }
             
             // Play alarm sound (can be replaced with actual sound)
             function playAlarmSound() {
-                alert("Time's up!");
+                const mode = isWorkMode ? "Work" : "Break";
+                alert(`${mode} time is up! Timer will continue in overtime.`);
             }
             
             // Event listeners
