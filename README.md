@@ -16,5 +16,11 @@ in the child database. The basic columns for `Pomodoro Sessions` are: `Name`, `P
     1. Cd into server
     2. Using Node >= 16, do `npm install`
     3. Run `node server.js` 
-4. Open the client/pomodoro.html by double clicking or using `open client/pomodoro.html`
+4. Open the client/pomodoro.html file in browser.
 5. Your pomodoro clock is up 🥳
+
+## Caveats
+
+1. On page refresh, the timer would be lost.
+2. The server should be kept on running or else, after the timer is stopped, the session would be lost.
+   There is no background retry.
