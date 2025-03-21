@@ -14,8 +14,10 @@ in the child database. The basic columns for `Pomodoro Sessions` are: `Name`, `P
 1. Clone this repository.
 2. Run the server
     1. Cd into server
-    2. Using Node >= 16, do `npm install`
-    3. Run `node server.js` 
+    2. Using go >= 1.24.1, do `go mod tidy`
+    3. Copy .env.example to .env and fill the values
+    4. Run `source .env`
+    5. Run `go run server.go` 
 4. Open the client/pomodoro.html file in browser.
 5. Your pomodoro clock is up 🥳
 
