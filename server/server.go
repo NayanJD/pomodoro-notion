@@ -148,6 +148,9 @@ func handleSession(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := slog.Default().With("handler", "log-session")
 
+		logger.Info("received request")
+		defer logger.Info("handled request")
+
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method == http.MethodOptions {
@@ -301,8 +304,8 @@ func main() {
 	})
 
 	httpServer := &http.Server{
-		Addr: net.JoinHostPort("0.0.0.0", cfg.Port),
-		Handler:      cors.Handler(mux),
+		Addr:    net.JoinHostPort("0.0.0.0", cfg.Port),
+		Handler: cors.Handler(mux),
 		// Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
