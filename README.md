@@ -26,3 +26,13 @@ in the child database. The basic columns for `Pomodoro Sessions` are: `Name`, `P
 1. On page refresh, the timer would be lost.
 2. The server should be kept on running or else, after the timer is stopped, the session would be lost.
    There is no background retry.
+
+## Usage
+
+To create a summary of work done yesterday and the tasks which are planned for today:
+
+```bash
+curl "http://localhost:5000/display-summary/?date=2025-03-31&today=true"
+```
+
+`date` param would pull items from Pomodoro Sessions notion database and create a report with Project tasks and Projects. `today` param would pull the Project tasks which are In Progress status.
