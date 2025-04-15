@@ -289,6 +289,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
     
     logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
       Level: getLogLevelFromEnv().Level(),
+      AddSource: true,
     }))
 
 		logger.Info("request received")
