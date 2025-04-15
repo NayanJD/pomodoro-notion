@@ -286,11 +286,11 @@ func handleSession(cfg *Config) http.HandlerFunc {
 func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// logger := slog.Default().With("handler", "display-summary")
-    
-    logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-      Level: getLogLevelFromEnv().Level(),
-      AddSource: true,
-    }))
+
+		logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level:     getLogLevelFromEnv().Level(),
+			AddSource: true,
+		}))
 
 		logger.Info("request received")
 		defer logger.Info("request completed")
@@ -313,7 +313,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Type", "text/markdown")
 
 		// Handle today's tasks if requested
 		if showToday {
@@ -324,7 +324,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 			}
 		}
 
-    logger.Debug("Today's tasks has been fetched!")
+		logger.Debug("Today's tasks has been fetched!")
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
@@ -411,7 +411,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 		// Step 3: Fetch each project individually
 		w.Header().Set("Content-Type", "text/plain")
 
-		fmt.Fprintf(w, "%s\n", date)
+		fmt.Fprintf(w, "# %s\n\n", date)
 
 		for _, projectId := range projectIds {
 			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
@@ -429,22 +429,23 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 				if url, ok := urlProp["url"].(string); ok && url != "" {
 					projectURL = url
 				} else {
-          logger.Debug("url key not found for Project URL property")
-        }
+					logger.Debug("url key not found for Project URL property")
+				}
 			} else {
-        logger.Debug("Project URL key not found")
-      }
+				logger.Debug("Project URL key not found")
+			}
 
 			// Display project name with URL if available
 			if projectURL != "" {
-				fmt.Fprintf(w, "- %s %s\n", projectName, projectURL)
+				fmt.Fprintf(w, "## [%s](%s)\n\n", projectName, projectURL)
 			} else {
-				fmt.Fprintf(w, "- %s\n", projectName)
+				fmt.Fprintf(w, "## %s\n\n", projectName)
 			}
 
 			for _, taskName := range projectTaskMap[projectId] {
-				fmt.Fprintf(w, "    - %s\n", taskName.Name)
+				fmt.Fprintf(w, "* %s\n", taskName.Name)
 			}
+			fmt.Fprintln(w) // Add a blank line between projects
 		}
 	}
 }
@@ -612,7 +613,7 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 	}
 
 	if len(tasks.Results) == 0 {
-		fmt.Fprintln(w, "Today\nNo tasks in progress")
+		fmt.Fprintf(w, "# Today\n\n*No tasks in progress*\n")
 		return nil
 	}
 
@@ -648,45 +649,47 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 
 	if len(projectIds) == 0 {
 		fmt.Fprintln(w, "Today\nNo projects found for the tasks")
-		return nil
-	}
+    return nil
+  }
 
-	// Display the results
-	fmt.Fprintln(w, "Today")
+		// Display the results
+		fmt.Fprintf(w, "# Today\n\n")
 
-	for _, projectId := range projectIds {
-		project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
-		if err != nil {
-			logger.Error("failed to fetch project", "projectId", projectId, "error", err)
-			continue
-		}
-
-		props := project["properties"].(map[string]interface{})
-		projectName := extractNotionTitle(props["Name"])
-
-		// Extract Project URL if it exists
-		projectURL := ""
-		if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
-			if url, ok := urlProp["url"].(string); ok && url != "" {
-				projectURL = url
-			} else {
-				logger.Debug("url key not found for Project URL property")
+		for _, projectId := range projectIds {
+			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
+			if err != nil {
+				logger.Error("failed to fetch project", "projectId", projectId, "error", err)
+				continue
 			}
-		} else {
-			logger.Debug("Project URL key not found")
+
+			props := project["properties"].(map[string]interface{})
+			projectName := extractNotionTitle(props["Name"])
+
+			// Extract Project URL if it exists
+			projectURL := ""
+			if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
+				if url, ok := urlProp["url"].(string); ok && url != "" {
+					projectURL = url
+				} else {
+					logger.Debug("url key not found for Project URL property")
+				}
+			} else {
+				logger.Debug("Project URL key not found")
+			}
+
+			// Display project name with URL if available
+			if projectURL != "" {
+				fmt.Fprintf(w, "## [%s](%s)\n\n", projectName, projectURL)
+			} else {
+				fmt.Fprintf(w, "## %s\n\n", projectName)
+			}
+
+			for _, taskName := range projectTaskMap[projectId] {
+				fmt.Fprintf(w, "* %s\n", taskName.Name)
+			}
+			fmt.Fprintln(w) // Add a blank line between projects
 		}
 
-		// Display project name with URL if available
-		if projectURL != "" {
-			fmt.Fprintf(w, "- %s %s\n", projectName, projectURL)
-		} else {
-			fmt.Fprintf(w, "- %s\n", projectName)
-		}
-
-		for _, taskName := range projectTaskMap[projectId] {
-			fmt.Fprintf(w, "    - %s\n", taskName.Name)
-		}
-	}
 
 	fmt.Fprintln(w) // Add a blank line between sections
 	return nil
@@ -708,17 +711,17 @@ func generateRandomString(length uint32) string {
 }
 
 func getLogLevelFromEnv() slog.Level {
-    levelStr := os.Getenv("LOG_LEVEL")
-    switch strings.ToLower(levelStr) {
-    case "debug":
-        return slog.LevelDebug
-    case "info":
-        return slog.LevelInfo
-    case "warn":
-        return slog.LevelWarn
-    case "error":
-        return slog.LevelError
-    default:
-        return slog.Level(100) // Custom level higher than any standard level, so silent by default
-    }
+	levelStr := os.Getenv("LOG_LEVEL")
+	switch strings.ToLower(levelStr) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.Level(100) // Custom level higher than any standard level, so silent by default
+	}
 }
