@@ -411,7 +411,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 		// Step 3: Fetch each project individually
 		w.Header().Set("Content-Type", "text/plain")
 
-		fmt.Fprintf(w, "# %s\n\n", date)
+		fmt.Fprintf(w, "%s\n\n", date)
 
 		for _, projectId := range projectIds {
 			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
@@ -437,9 +437,9 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 
 			// Display project name with URL if available
 			if projectURL != "" {
-				fmt.Fprintf(w, "## [%s](%s)\n\n", projectName, projectURL)
+				fmt.Fprintf(w, "[%s](%s)\n", projectName, projectURL)
 			} else {
-				fmt.Fprintf(w, "## %s\n\n", projectName)
+				fmt.Fprintf(w, "%s\n", projectName)
 			}
 
 			for _, taskName := range projectTaskMap[projectId] {
@@ -613,7 +613,7 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 	}
 
 	if len(tasks.Results) == 0 {
-		fmt.Fprintf(w, "# Today\n\n*No tasks in progress*\n")
+		fmt.Fprintf(w, "Today\n\n*No tasks in progress*\n")
 		return nil
 	}
 
@@ -648,12 +648,12 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 	}
 
 	if len(projectIds) == 0 {
-		fmt.Fprintln(w, "Today\nNo projects found for the tasks")
+		fmt.Fprintln(w, "Today\n\nNo projects found for the tasks\n")
     return nil
   }
 
 		// Display the results
-		fmt.Fprintf(w, "# Today\n\n")
+		fmt.Fprintf(w, "Today\n\n")
 
 		for _, projectId := range projectIds {
 			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
@@ -679,9 +679,9 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 
 			// Display project name with URL if available
 			if projectURL != "" {
-				fmt.Fprintf(w, "## [%s](%s)\n\n", projectName, projectURL)
+				fmt.Fprintf(w, "[%s](%s)\n", projectName, projectURL)
 			} else {
-				fmt.Fprintf(w, "## %s\n\n", projectName)
+				fmt.Fprintf(w, "%s\n", projectName)
 			}
 
 			for _, taskName := range projectTaskMap[projectId] {
