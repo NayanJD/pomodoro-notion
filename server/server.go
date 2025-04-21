@@ -411,7 +411,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 		// Step 3: Fetch each project individually
 		w.Header().Set("Content-Type", "text/plain")
 
-		fmt.Fprintf(w, "%s\n\n", date)
+		fmt.Fprintf(w, "**%s**\n\n", date)
 
 		for _, projectId := range projectIds {
 			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
@@ -613,7 +613,7 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 	}
 
 	if len(tasks.Results) == 0 {
-		fmt.Fprintf(w, "Today\n\n*No tasks in progress*\n")
+		fmt.Fprintf(w, "**Today**\n\n*No tasks in progress*\n")
 		return nil
 	}
 
@@ -653,7 +653,7 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
   }
 
 		// Display the results
-		fmt.Fprintf(w, "Today\n\n")
+		fmt.Fprintf(w, "**Today**\n\n")
 
 		for _, projectId := range projectIds {
 			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
