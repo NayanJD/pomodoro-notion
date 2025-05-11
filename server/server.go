@@ -315,22 +315,17 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "text/markdown")
 
-		// Handle today's tasks if requested
-		if showToday {
-			if err := displayTodaysTasks(w, cfg, logger); err != nil {
-				logger.Error("failed to display today's tasks", "error", err)
-				http.Error(w, "failed to display today's tasks", http.StatusInternalServerError)
-				// return
-			}
-		}
-
-		logger.Debug("Today's tasks has been fetched!")
+		fmt.Fprintln(w, "**Standup update date**")
+		fmt.Fprintln(w, time.Now().Format(time.DateOnly))
+		fmt.Fprintln(w)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
-		// Step 1: Query Pomodoro Sessions for the given date
-		sessionFilter := fmt.Sprintf(`{
+		if date != "" {
+
+			// Step 1: Query Pomodoro Sessions for the given date
+			sessionFilter := fmt.Sprintf(`{
 			"filter": {
 				"property": "Start Date",
 				"date": {
@@ -339,114 +334,137 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 			}
 		}`, date)
 
-		sessions, err := queryNotionDatabase(ctx, cfg.PomodoroSessionDbId, sessionFilter, cfg.NotionAPIKey)
-		if err != nil {
-			logger.Error("failed to fetch pomodoro sessions", "error", err)
-			http.Error(w, "failed to fetch pomodoro sessions", http.StatusInternalServerError)
-			return
-		}
+			sessions, err := queryNotionDatabase(ctx, cfg.PomodoroSessionDbId, sessionFilter, cfg.NotionAPIKey)
+			if err != nil {
+				logger.Error("failed to fetch pomodoro sessions", "error", err)
+				http.Error(w, "failed to fetch pomodoro sessions", http.StatusInternalServerError)
+				return
+			}
 
-		// Extract task IDs from sessions
-		var taskIds []string
-		for _, session := range sessions.Results {
-			if relations, ok := session["properties"].(map[string]interface{})["Project Tasks"].(map[string]interface{})["relation"].([]interface{}); ok {
-				for _, relation := range relations {
-					if relMap, ok := relation.(map[string]interface{}); ok {
-						taskIds = append(taskIds, relMap["id"].(string))
+			// Extract task IDs from sessions
+			var taskIds []string
+			for _, session := range sessions.Results {
+				if relations, ok := session["properties"].(map[string]interface{})["Project Tasks"].(map[string]interface{})["relation"].([]interface{}); ok {
+					for _, relation := range relations {
+						if relMap, ok := relation.(map[string]interface{}); ok {
+							taskIds = append(taskIds, relMap["id"].(string))
+						}
 					}
 				}
 			}
-		}
 
-		if len(taskIds) == 0 {
-			w.Header().Set("Content-Type", "text/plain")
-			fmt.Fprintln(w, "No tasks found for the given date")
-			return
-		}
+			// Complying with Victor's message format
+			// fmt.Fprintf(w, "**%s**\n\n", date)
+			fmt.Fprintln(w, "Yesterday\n")
 
-		// Step 2: Fetch Project Tasks individually
+			if len(taskIds) > 0 {
+				fmt.Fprintln(w, "Tasks found for the given date")
 
-		projectTaskMap := make(map[string]map[string]Task) // map[projectId]map[taskId]Task
-		var projectIds []string
-		seenProjectIds := make(map[string]bool)
+				// Step 2: Fetch Project Tasks individually
 
-		for _, taskId := range taskIds {
-			task, err := getNotionPage(ctx, taskId, cfg.NotionAPIKey)
-			if err != nil {
-				logger.Error("failed to fetch project task", "taskId", taskId, "error", err)
-				continue
-			}
+				projectTaskMap := make(map[string]map[string]Task) // map[projectId]map[taskId]Task
+				var projectIds []string
+				seenProjectIds := make(map[string]bool)
 
-			props := task["properties"].(map[string]interface{})
+				for _, taskId := range taskIds {
+					task, err := getNotionPage(ctx, taskId, cfg.NotionAPIKey)
+					if err != nil {
+						logger.Error("failed to fetch project task", "taskId", taskId, "error", err)
+						continue
+					}
 
-			// Extract task name
-			taskName := extractNotionTitle(props["Name"])
+					props := task["properties"].(map[string]interface{})
 
-			// Extract project IDs
-			if relations, ok := props["Projects"].(map[string]interface{})["relation"].([]interface{}); ok {
-				for _, relation := range relations {
-					if relMap, ok := relation.(map[string]interface{}); ok {
-						projectId := relMap["id"].(string)
-						if !seenProjectIds[projectId] {
-							projectIds = append(projectIds, projectId)
-							seenProjectIds[projectId] = true
-							projectTaskMap[projectId] = make(map[string]Task)
+					// Extract task name
+					taskName := extractNotionTitle(props["Name"])
+
+					// Extract project IDs
+					if relations, ok := props["Projects"].(map[string]interface{})["relation"].([]interface{}); ok {
+						for _, relation := range relations {
+							if relMap, ok := relation.(map[string]interface{}); ok {
+								projectId := relMap["id"].(string)
+								if !seenProjectIds[projectId] {
+									projectIds = append(projectIds, projectId)
+									seenProjectIds[projectId] = true
+									projectTaskMap[projectId] = make(map[string]Task)
+								}
+								projectTaskMap[projectId][taskId] = Task{
+									ID:   taskId,
+									Name: taskName,
+								}
+
+							}
 						}
-						projectTaskMap[projectId][taskId] = Task{
-							ID:   taskId,
-							Name: taskName,
-						}
-
 					}
 				}
-			}
-		}
 
-		if len(projectIds) == 0 {
-			w.Header().Set("Content-Type", "text/plain")
-			fmt.Fprintln(w, "No projects found for the tasks")
-			return
-		}
+				if len(projectIds) == 0 {
+					w.Header().Set("Content-Type", "text/plain")
+					fmt.Fprintln(w, "No projects found for the tasks")
+					return
+				}
 
-		// Step 3: Fetch each project individually
-		w.Header().Set("Content-Type", "text/plain")
+				// Step 3: Fetch each project individually
 
-		fmt.Fprintf(w, "**%s**\n\n", date)
+				projectSlNo := 1
+				for _, projectId := range projectIds {
+					project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
+					if err != nil {
+						logger.Error("failed to fetch project", "projectId", projectId, "error", err)
+						continue
+					}
 
-		for _, projectId := range projectIds {
-			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
-			if err != nil {
-				logger.Error("failed to fetch project", "projectId", projectId, "error", err)
-				continue
-			}
+					props := project["properties"].(map[string]interface{})
+					projectName := extractNotionTitle(props["Name"])
 
-			props := project["properties"].(map[string]interface{})
-			projectName := extractNotionTitle(props["Name"])
+					// Extract Project URL if it exists
+					projectURL := ""
+					if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
+						if url, ok := urlProp["url"].(string); ok && url != "" {
+							projectURL = url
+						} else {
+							logger.Debug("url key not found for Project URL property")
+						}
+					} else {
+						logger.Debug("Project URL key not found")
+					}
 
-			// Extract Project URL if it exists
-			projectURL := ""
-			if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
-				if url, ok := urlProp["url"].(string); ok && url != "" {
-					projectURL = url
-				} else {
-					logger.Debug("url key not found for Project URL property")
+					// Display project name with URL if available
+					if projectURL != "" {
+						fmt.Fprintf(w, "%d. [%s](%s)\n", projectSlNo, projectName, projectURL)
+					} else {
+						fmt.Fprintf(w, "%d. %s\n", projectSlNo, projectName)
+					}
+
+					taskSlNo := 1
+					for _, taskName := range projectTaskMap[projectId] {
+						fmt.Fprintf(w, "%d. %s\n", taskSlNo, taskName.Name)
+						taskSlNo++
+					}
+
+					fmt.Fprintln(w) // Add a blank line between projects
+
+					projectSlNo++
 				}
 			} else {
-				logger.Debug("Project URL key not found")
+				fmt.Fprintln(w, "No tasks found for the given date\n")
 			}
-
-			// Display project name with URL if available
-			if projectURL != "" {
-				fmt.Fprintf(w, "[%s](%s)\n", projectName, projectURL)
-			} else {
-				fmt.Fprintf(w, "%s\n", projectName)
-			}
-
-			for _, taskName := range projectTaskMap[projectId] {
-				fmt.Fprintf(w, "* %s\n", taskName.Name)
-			}
-			fmt.Fprintln(w) // Add a blank line between projects
 		}
+
+		// Handle today's tasks if requested
+		if showToday {
+			if err := displayTodaysTasks(w, cfg, logger); err != nil {
+				logger.Error("failed to display today's tasks", "error", err)
+				http.Error(w, "failed to display today's tasks", http.StatusInternalServerError)
+				// return
+			}
+
+			logger.Debug("Today's tasks has been fetched!")
+		}
+
+		// Complying with Victor's message format
+		fmt.Fprintln(w, "**Blockers**\n\n")
+		fmt.Fprintln(w, "**On Call?**\n\n")
 	}
 }
 
@@ -649,47 +667,52 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 
 	if len(projectIds) == 0 {
 		fmt.Fprintln(w, "Today\n\nNo projects found for the tasks\n")
-    return nil
-  }
+		return nil
+	}
 
-		// Display the results
-		fmt.Fprintf(w, "**Today**\n\n")
+	// Display the results
+	fmt.Fprintf(w, "**Today**\n\n")
 
-		for _, projectId := range projectIds {
-			project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
-			if err != nil {
-				logger.Error("failed to fetch project", "projectId", projectId, "error", err)
-				continue
-			}
+	projectSlNo := 1
 
-			props := project["properties"].(map[string]interface{})
-			projectName := extractNotionTitle(props["Name"])
-
-			// Extract Project URL if it exists
-			projectURL := ""
-			if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
-				if url, ok := urlProp["url"].(string); ok && url != "" {
-					projectURL = url
-				} else {
-					logger.Debug("url key not found for Project URL property")
-				}
-			} else {
-				logger.Debug("Project URL key not found")
-			}
-
-			// Display project name with URL if available
-			if projectURL != "" {
-				fmt.Fprintf(w, "[%s](%s)\n", projectName, projectURL)
-			} else {
-				fmt.Fprintf(w, "%s\n", projectName)
-			}
-
-			for _, taskName := range projectTaskMap[projectId] {
-				fmt.Fprintf(w, "* %s\n", taskName.Name)
-			}
-			fmt.Fprintln(w) // Add a blank line between projects
+	for _, projectId := range projectIds {
+		project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
+		if err != nil {
+			logger.Error("failed to fetch project", "projectId", projectId, "error", err)
+			continue
 		}
 
+		props := project["properties"].(map[string]interface{})
+		projectName := extractNotionTitle(props["Name"])
+
+		// Extract Project URL if it exists
+		projectURL := ""
+		if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
+			if url, ok := urlProp["url"].(string); ok && url != "" {
+				projectURL = url
+			} else {
+				logger.Debug("url key not found for Project URL property")
+			}
+		} else {
+			logger.Debug("Project URL key not found")
+		}
+
+		// Display project name with URL if available
+		if projectURL != "" {
+			fmt.Fprintf(w, "%d. [%s](%s)\n", projectSlNo, projectName, projectURL)
+		} else {
+			fmt.Fprintf(w, "%d. %s\n", projectSlNo, projectName)
+		}
+    
+    taskSlNo := 1
+		for _, taskName := range projectTaskMap[projectId] {
+			fmt.Fprintf(w, "\t%d. %s\n",taskSlNo, taskName.Name)
+      taskSlNo++
+		}
+		fmt.Fprintln(w) // Add a blank line between projects
+
+    projectSlNo++
+	}
 
 	fmt.Fprintln(w) // Add a blank line between sections
 	return nil
