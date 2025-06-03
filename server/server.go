@@ -600,7 +600,7 @@ func main() {
 		Handler: cors.Handler(mux),
 		// Handler:      mux,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
@@ -703,15 +703,15 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 		} else {
 			fmt.Fprintf(w, "%d. %s\n", projectSlNo, projectName)
 		}
-    
-    taskSlNo := 1
+
+		taskSlNo := 1
 		for _, taskName := range projectTaskMap[projectId] {
-			fmt.Fprintf(w, "\t%d. %s\n",taskSlNo, taskName.Name)
-      taskSlNo++
+			fmt.Fprintf(w, "\t%d. %s\n", taskSlNo, taskName.Name)
+			taskSlNo++
 		}
 		fmt.Fprintln(w) // Add a blank line between projects
 
-    projectSlNo++
+		projectSlNo++
 	}
 
 	fmt.Fprintln(w) // Add a blank line between sections
