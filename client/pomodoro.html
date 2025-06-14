@@ -231,8 +231,9 @@
             function logSession() {
                 // Only log if we're in work mode and have a selected task
                 if (isWorkMode && taskSelect.value) {
-                    const endTime = new Date().toISOString();
-                    
+
+                    const endTime = nowRFC3339String()
+
                     fetch('http://localhost:5000/log-session', {
                         method: 'POST',
                         headers: {
@@ -311,7 +312,7 @@
                 
                 // Record session start time for work mode
                 if (isWorkMode) {
-                    sessionStartTime = new Date().toISOString();
+                    sessionStartTime = nowRFC3339String()
                     currentTask.classList.remove('d-none');
                     taskDisplay.textContent = taskSelect.options[taskSelect.selectedIndex].text;
                 }
@@ -379,6 +380,13 @@
                 alert(`${mode} time is up! Timer will continue in overtime.`);
             }
             
+            function nowRFC3339String() {
+                var tzoffset = (new Date()).getTimezoneOffset() * 60000; //offset in milliseconds
+                var localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, -1);
+                    
+                return localISOTime + "+05:30"
+            }
+
             // Event listeners
             modeSwitch.addEventListener('change', updateTimerDisplay);
             workTimeInput.addEventListener('change', function() {

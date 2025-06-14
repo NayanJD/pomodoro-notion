@@ -36,6 +36,7 @@ type NotionPage struct {
 type Task struct {
 	ID   string
 	Name string
+	URL  string
 }
 
 type Config struct {
@@ -121,7 +122,13 @@ func handleTasks(cfg *Config) http.HandlerFunc {
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil || (resp != nil && resp.StatusCode >= 500 && resp.StatusCode < 600) {
-			logger.Error("Error while making request to notion", "err", err, "statusCode", resp.StatusCode)
+			var statusCode int
+
+			if resp != nil {
+				statusCode = resp.StatusCode
+			}
+
+			logger.Error("Error while making request to notion", "err", err, "statusCode", statusCode)
 			sendJSONResponse(w, http.StatusInternalServerError, Response{
 				Error: "failed to fetch tasks from Notion",
 			})
@@ -191,18 +198,17 @@ func handleSession(cfg *Config) http.HandlerFunc {
 
 		startTime, err := time.Parse(time.RFC3339, sessionReqBody.StartTime)
 		if err != nil {
-			logger.Error("Error while parsing start time date", "err", err)
+			logger.Error("Error while parsing start time date", "err", err, "input", sessionReqBody.StartTime)
 			sendJSONResponse(w, http.StatusBadRequest, Response{
-				Error: "failed to parse start time",
+				Error: fmt.Sprintf("failed to parse start time: %v", err),
 			})
 			return
 		}
-
 		endTime, err := time.Parse(time.RFC3339, sessionReqBody.EndTime)
 		if err != nil {
-			logger.Error("Error while parsing start time date", "err", err)
+			logger.Error("Error while parsing start time date", "err", err, "input", sessionReqBody.EndTime)
 			sendJSONResponse(w, http.StatusBadRequest, Response{
-				Error: "failed to parse end time",
+				Error: fmt.Sprintf("failed to parse start time: %v", err),
 			})
 			return
 		}
@@ -226,7 +232,7 @@ func handleSession(cfg *Config) http.HandlerFunc {
         }
       }`, cfg.PomodoroSessionDbId, generateRandomString(6), startTime.Format(time.RFC3339), endTime.Format(time.RFC3339), taskId)
 
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
 
 		req, err := http.NewRequestWithContext(ctx,
@@ -246,10 +252,17 @@ func handleSession(cfg *Config) http.HandlerFunc {
 		req.Header.Add("Notion-Version", "2022-06-28")
 		req.Header.Add("Content-Type", "application/json")
 
-		client := &http.Client{Timeout: 10 * time.Second}
+		client := &http.Client{Timeout: 60 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil || (resp != nil && resp.StatusCode >= 500 && resp.StatusCode < 600) {
-			logger.Error("Error while making request to notion", "err", err, "statusCode", resp.StatusCode)
+
+			var statusCode int
+
+			if resp != nil {
+				statusCode = resp.StatusCode
+			}
+
+			logger.Error("Error while making request to notion", "err", err, "statusCode", statusCode)
 			sendJSONResponse(w, http.StatusInternalServerError, Response{
 				Error: "failed to fetch tasks from Notion",
 			})
@@ -288,8 +301,8 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 		// logger := slog.Default().With("handler", "display-summary")
 
 		logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level:     getLogLevelFromEnv().Level(),
-			AddSource: true,
+			Level: getLogLevelFromEnv().Level(),
+			// AddSource: true,
 		}))
 
 		logger.Info("request received")
@@ -315,7 +328,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "text/markdown")
 
-		fmt.Fprintln(w, "**Standup update date**")
+		fmt.Fprintln(w, "*Standup update date*")
 		fmt.Fprintln(w, time.Now().Format(time.DateOnly))
 		fmt.Fprintln(w)
 
@@ -355,18 +368,23 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 
 			// Complying with Victor's message format
 			// fmt.Fprintf(w, "**%s**\n\n", date)
-			fmt.Fprintln(w, "Yesterday\n")
+			fmt.Fprintf(w, "*Yesterday (%s)*\n\n", date)
 
 			if len(taskIds) > 0 {
-				fmt.Fprintln(w, "Tasks found for the given date")
+				logger.Debug(fmt.Sprintf("%d tasks found for the given date", len(taskIds)))
 
 				// Step 2: Fetch Project Tasks individually
-
 				projectTaskMap := make(map[string]map[string]Task) // map[projectId]map[taskId]Task
 				var projectIds []string
 				seenProjectIds := make(map[string]bool)
 
 				for _, taskId := range taskIds {
+					taskObj := Task{
+						ID: taskId,
+					}
+
+					logger.Debug(fmt.Sprintf("Fetching for taskId: %v", taskId))
+
 					task, err := getNotionPage(ctx, taskId, cfg.NotionAPIKey)
 					if err != nil {
 						logger.Error("failed to fetch project task", "taskId", taskId, "error", err)
@@ -376,7 +394,18 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 					props := task["properties"].(map[string]interface{})
 
 					// Extract task name
-					taskName := extractNotionTitle(props["Name"])
+					taskObj.Name = extractNotionTitle(props["Name"])
+
+					// Extract Project URL if it exists
+					if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
+						if url, ok := urlProp["url"].(string); ok && url != "" {
+							taskObj.URL = url
+						} else {
+							logger.Debug("url key not found for Project URL property")
+						}
+					} else {
+						logger.Debug("Project URL key not found")
+					}
 
 					// Extract project IDs
 					if relations, ok := props["Projects"].(map[string]interface{})["relation"].([]interface{}); ok {
@@ -388,26 +417,23 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 									seenProjectIds[projectId] = true
 									projectTaskMap[projectId] = make(map[string]Task)
 								}
-								projectTaskMap[projectId][taskId] = Task{
-									ID:   taskId,
-									Name: taskName,
-								}
-
+								projectTaskMap[projectId][taskId] = taskObj
 							}
 						}
 					}
 				}
 
 				if len(projectIds) == 0 {
-					w.Header().Set("Content-Type", "text/plain")
+					// w.Header().Set("Content-Type", "text/plain")
 					fmt.Fprintln(w, "No projects found for the tasks")
-					return
 				}
 
 				// Step 3: Fetch each project individually
 
 				projectSlNo := 1
 				for _, projectId := range projectIds {
+					logger.Debug(fmt.Sprintf("Fetching for projectId: %v", projectId))
+
 					project, err := getNotionPage(ctx, projectId, cfg.NotionAPIKey)
 					if err != nil {
 						logger.Error("failed to fetch project", "projectId", projectId, "error", err)
@@ -438,7 +464,11 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 
 					taskSlNo := 1
 					for _, taskName := range projectTaskMap[projectId] {
-						fmt.Fprintf(w, "%d. %s\n", taskSlNo, taskName.Name)
+						if taskName.URL != "" {
+							fmt.Fprintf(w, "\t%d. [%s](%s)\n", taskSlNo, taskName.Name, taskName.URL)
+						} else {
+							fmt.Fprintf(w, "\t%d. %s\n", taskSlNo, taskName.Name)
+						}
 						taskSlNo++
 					}
 
@@ -447,6 +477,7 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 					projectSlNo++
 				}
 			} else {
+				logger.Debug("No tasks found for the given date")
 				fmt.Fprintln(w, "No tasks found for the given date\n")
 			}
 		}
@@ -463,8 +494,8 @@ func handleDisplaySummary(cfg *Config) http.HandlerFunc {
 		}
 
 		// Complying with Victor's message format
-		fmt.Fprintln(w, "**Blockers**\n\n")
-		fmt.Fprintln(w, "**On Call?**\n\n")
+		fmt.Fprintln(w, "*Blockers*\n\n")
+		fmt.Fprintln(w, "*On Call?*\n\n")
 	}
 }
 
@@ -642,9 +673,26 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 
 	// Process each task
 	for _, task := range tasks.Results {
+
 		taskId := task["id"].(string)
+
+		taskObj := Task{
+			ID: taskId,
+		}
+
 		props := task["properties"].(map[string]interface{})
-		taskName := extractNotionTitle(props["Name"])
+		taskObj.Name = extractNotionTitle(props["Name"])
+
+		// Extract Project URL if it exists
+		if urlProp, ok := props["Project URL"].(map[string]interface{}); ok {
+			if url, ok := urlProp["url"].(string); ok && url != "" {
+				taskObj.URL = url
+			} else {
+				logger.Debug("url key not found for Project URL property")
+			}
+		} else {
+			logger.Debug("Project URL key not found")
+		}
 
 		// Extract project IDs
 		if relations, ok := props["Projects"].(map[string]interface{})["relation"].([]interface{}); ok {
@@ -656,10 +704,7 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 						seenProjectIds[projectId] = true
 						projectTaskMap[projectId] = make(map[string]Task)
 					}
-					projectTaskMap[projectId][taskId] = Task{
-						ID:   taskId,
-						Name: taskName,
-					}
+					projectTaskMap[projectId][taskId] = taskObj
 				}
 			}
 		}
@@ -671,7 +716,7 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 	}
 
 	// Display the results
-	fmt.Fprintf(w, "**Today**\n\n")
+	fmt.Fprintf(w, "*Today*\n\n")
 
 	projectSlNo := 1
 
@@ -706,7 +751,11 @@ func displayTodaysTasks(w http.ResponseWriter, cfg *Config, logger *slog.Logger)
 
 		taskSlNo := 1
 		for _, taskName := range projectTaskMap[projectId] {
-			fmt.Fprintf(w, "\t%d. %s\n", taskSlNo, taskName.Name)
+			if taskName.URL != "" {
+				fmt.Fprintf(w, "\t%d. [%s](%s)\n", taskSlNo, taskName.Name, taskName.URL)
+			} else {
+				fmt.Fprintf(w, "\t%d. %s\n", taskSlNo, taskName.Name)
+			}
 			taskSlNo++
 		}
 		fmt.Fprintln(w) // Add a blank line between projects
